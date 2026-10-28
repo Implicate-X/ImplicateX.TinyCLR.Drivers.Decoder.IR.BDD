@@ -107,3 +107,7 @@ The BDD implementation is particularly suited for RC5-style Binary Distance enco
 ## 📄 License
 
 Independent part of the WebTuner project.
+
+## ❤️ TinyCLR OS
+
+Designed for modern embedded development using .NET and TinyCLR OS.
