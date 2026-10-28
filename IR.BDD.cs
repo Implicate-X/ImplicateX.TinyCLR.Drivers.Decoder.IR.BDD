@@ -93,10 +93,10 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 		///   performs normalization and debounce/deduplication, then raises events.
 		/// </remarks>
 
-		private readonly SignalCapture capture_;
-        private readonly TimeSpan[] buffer_ = new TimeSpan[ 256 ];
-        private ushort lastPublishedRaw_;
-        private long lastPublishedTicks_;
+		private readonly SignalCapture capture;
+        private readonly TimeSpan[] buffer = new TimeSpan[ 256 ];
+        private ushort lastPublishedRaw;
+        private long lastPublishedTicks;
 
 		/// <summary>
 		/// Occurs when a valid BDD frame has been decoded.
@@ -124,7 +124,7 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 
             pin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 
-            this.capture_ = new SignalCapture( pin )
+            this.capture = new SignalCapture( pin )
             {
                 Timeout = TimeSpan.FromMilliseconds( 100 ),
                 DisableInterrupts = false
@@ -150,25 +150,26 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
             {
                 try
                 {
-                    int count = this.capture_.Read( out GpioPinValue initial, this.buffer_ );
+                    int count = this.capture.Read( out GpioPinValue initial, this.buffer );
 
                     if( count < 10 )
                     {
                         continue;
                     }
 
-                    if( TryDecode( initial, this.buffer_, count, out ushort rawValue, out int bitCount ) )
+                    if( TryDecode( initial, this.buffer, count, out ushort rawValue, out int bitCount ) )
                     {
                         rawValue = NormalizeRaw( rawValue );
                         long nowTicks = DateTime.UtcNow.Ticks;
 
-                        if( rawValue == this.lastPublishedRaw_ && ( nowTicks - this.lastPublishedTicks_ ) < TimeSpan.FromMilliseconds( 180 ).Ticks )
+                        if( rawValue == this.lastPublishedRaw && 
+                            ( nowTicks - this.lastPublishedTicks ) < TimeSpan.FromMilliseconds( 180 ).Ticks )
                         {
                             continue;
                         }
 
-                        this.lastPublishedRaw_ = rawValue;
-                        this.lastPublishedTicks_ = nowTicks;
+                        this.lastPublishedRaw = rawValue;
+                        this.lastPublishedTicks = nowTicks;
 
 						this.FrameDecoded?.Invoke( new FrameEventArgs( rawValue, bitCount ) );
 					}
