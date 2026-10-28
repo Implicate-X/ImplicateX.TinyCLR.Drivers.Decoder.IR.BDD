@@ -104,7 +104,7 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 		/// frame value and bit count. The decoder attempts to suppress duplicate
 		/// deliveries of the same logical frame within a short time window.
 		/// </summary>
-		public event Action<FrameEventArgs> FrameDecoded;
+		public event Action<FrameEventArgs> FrameDecoded = null!;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BinaryDistanceDecoder"/> class.
