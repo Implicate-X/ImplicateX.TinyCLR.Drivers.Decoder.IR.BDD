@@ -1,8 +1,9 @@
 <Solution>
   <Folder Name="/docs/">
+    <File Path="README.md" />
   </Folder>
-  <Project Path="ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD.csproj" Id="38864497-1a6e-4b46-b105-11123f7d4090" />
   <Project Path="App/ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD.App.csproj" Id="e65ce240-c284-4d34-b83a-b1ca2bedf2b0">
     <Deploy />
   </Project>
+  <Project Path="ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD.csproj" Id="4e143b55-5b02-4bf9-a7f4-42943983e2ad" />
 </Solution>

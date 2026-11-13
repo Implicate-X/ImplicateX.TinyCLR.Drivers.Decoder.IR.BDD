@@ -1,7 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
 using GHIElectronics.TinyCLR.Pins;
 using GHIElectronics.TinyCLR.Devices.Gpio;
-using System.Diagnostics;
 
 namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 {

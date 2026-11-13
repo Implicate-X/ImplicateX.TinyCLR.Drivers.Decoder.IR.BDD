@@ -94,9 +94,53 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 		/// </remarks>
 
 		private readonly SignalCapture capture;
-        private readonly TimeSpan[] buffer = new TimeSpan[ 256 ];
-        private ushort lastPublishedRaw;
-        private long lastPublishedTicks;
+		private readonly TimeSpan[] buffer = new TimeSpan[ 256 ];
+		/// <summary>
+		/// Signals that a capture request is pending.
+		/// </summary>
+		/// <remarks>The signal is reset automatically when a waiting thread is released.</remarks>
+		private readonly AutoResetEvent captureRequest = new( false );
+		/// <summary>
+		/// Synchronizes access to capture requests.
+		/// </summary>
+		private readonly object captureRequestSync = new();
+		private readonly GpioPin inputPin;
+		/// <summary>
+		/// Indicates whether a capture is pending.
+		/// </summary>
+		private bool capturePending;
+		/// <summary>
+		/// Stores the most recently published raw infrared signal value.
+		/// </summary>
+		private ushort lastPublishedRaw;
+		/// <summary>
+		/// The tick count of the most recently published value.
+		/// </summary>
+		private long lastPublishedTicks;
+		/// <summary>
+		/// The minimum number of capture edges required for a valid infrared signal.
+		/// </summary>
+		private const int MinimumCaptureEdgeCount = 10;
+		/// <summary>
+		/// The duration, in milliseconds, during which repeated signals are treated as duplicates.
+		/// </summary>
+		private const int DuplicateWindowMilliseconds = 180;
+		/// <summary>
+		/// The worker's base delay, in milliseconds.
+		/// </summary>
+		private const int WorkerBaseDelayMilliseconds = 1;
+		/// <summary>
+		/// The delay increment, in milliseconds, used by the worker noise routine.
+		/// </summary>
+		private const int WorkerNoiseDelayStepMilliseconds = 2;
+		/// <summary>
+		/// Maximum delay, in milliseconds, for worker noise.
+		/// </summary>
+		private const int WorkerNoiseDelayMaxMilliseconds = 24;
+		/// <summary>
+		/// The idle period, in milliseconds, after capture.
+		/// </summary>
+		private const int PostCaptureIdleMilliseconds = 35;
 
 		/// <summary>
 		/// Occurs when a valid BDD frame has been decoded.
@@ -116,22 +160,30 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 		/// Thrown when <paramref name="pin"/> is <see langword="null"/>.
 		/// </exception>
 		public BinaryDistanceDecoder( GpioPin pin )
-        {
-            if( pin == null )
-            {
-                throw new ArgumentNullException( nameof( pin ) );
-            }
+		{
+			if( pin == null )
+			{
+				throw new ArgumentNullException( nameof( pin ) );
+			}
 
-            pin.SetDriveMode( GpioPinDriveMode.InputPullUp );
+			pin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 
-            this.capture = new SignalCapture( pin )
-            {
-                Timeout = TimeSpan.FromMilliseconds( 100 ),
-                DisableInterrupts = false
-            };
+			this.inputPin = pin;
+			this.capture = new SignalCapture( pin )
+			{
+				Timeout = TimeSpan.FromMilliseconds( 120 ),
+				DisableInterrupts = false
+			};
 
-            new Thread( this.Worker ).Start();
-        }
+			this.inputPin.ValueChanged += this.OnInputPinValueChanged;
+
+			Thread workerThread = new( this.Worker )
+			{
+				Priority = ThreadPriority.BelowNormal
+			};
+
+			workerThread.Start();
+		}
 
         /// <summary>
         /// Background capture loop that reads pulse data and emits decoded frames.
@@ -144,42 +196,86 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
         /// - Normalizes complement-equivalent frames with <see cref="NormalizeRaw"/>.
         /// - Applies a short-time deduplication filter before invoking <see cref="FrameDecoded"/>.
         /// </remarks>
-        private void Worker()
-        {
-            while( true )
-            {
-                try
-                {
-                    int count = this.capture.Read( out GpioPinValue initial, this.buffer );
+		private void Worker()
+		{
+			int noiseDelayMilliseconds = WorkerBaseDelayMilliseconds;
 
-                    if( count < 10 )
-                    {
-                        continue;
-                    }
+			while( true )
+			{
+				this.captureRequest.WaitOne();
 
-                    if( TryDecode( initial, this.buffer, count, out ushort rawValue, out int bitCount ) )
-                    {
-                        rawValue = NormalizeRaw( rawValue );
-                        long nowTicks = DateTime.UtcNow.Ticks;
+				try
+				{
+					int count = this.capture.Read( out GpioPinValue initial, this.buffer );
 
-                        if( rawValue == this.lastPublishedRaw && 
-                            ( nowTicks - this.lastPublishedTicks ) < TimeSpan.FromMilliseconds( 180 ).Ticks )
-                        {
-                            continue;
-                        }
-
-                        this.lastPublishedRaw = rawValue;
-                        this.lastPublishedTicks = nowTicks;
-
-						this.FrameDecoded?.Invoke( new FrameEventArgs( rawValue, bitCount ) );
+					if( count < MinimumCaptureEdgeCount )
+					{
+						noiseDelayMilliseconds = 
+							Math.Min( noiseDelayMilliseconds + WorkerNoiseDelayStepMilliseconds, WorkerNoiseDelayMaxMilliseconds );
+						Thread.Sleep( noiseDelayMilliseconds );
 					}
-                }
-                catch
-                {
-                    Thread.Sleep( 5 );
-                }
-            }
-        }
+					else
+					{
+						noiseDelayMilliseconds = WorkerBaseDelayMilliseconds;
+
+						if( TryDecode( initial, this.buffer, count, out ushort rawValue, out int bitCount ) )
+						{
+							rawValue = NormalizeRaw( rawValue );
+							long nowTicks = DateTime.UtcNow.Ticks;
+
+							if( rawValue != this.lastPublishedRaw ||
+								( nowTicks - this.lastPublishedTicks ) >= TimeSpan.FromMilliseconds( DuplicateWindowMilliseconds ).Ticks )
+							{
+								this.lastPublishedRaw = rawValue;
+								this.lastPublishedTicks = nowTicks;
+								this.FrameDecoded?.Invoke( new FrameEventArgs( rawValue, bitCount ) );
+							}
+						}
+					}
+				}
+				catch
+				{
+					noiseDelayMilliseconds = 
+						Math.Min( noiseDelayMilliseconds + WorkerNoiseDelayStepMilliseconds, WorkerNoiseDelayMaxMilliseconds );
+
+					Thread.Sleep( noiseDelayMilliseconds );
+				}
+				finally
+				{
+					lock( this.captureRequestSync )
+					{
+						this.capturePending = false;
+					}
+
+					Thread.Sleep( PostCaptureIdleMilliseconds );
+				}
+			}
+		}
+
+		/// <summary>
+		/// Handles the ValueChanged event of the input pin.
+		/// </summary>
+		/// <param name="sender">The GPIO pin that triggered the event.</param>
+		/// <param name="args">The event data.</param>
+		private void OnInputPinValueChanged( GpioPin sender, GpioPinValueChangedEventArgs args )
+		{
+			if( args.Edge != GpioPinEdge.FallingEdge )
+			{
+				return;
+			}
+
+			lock( this.captureRequestSync )
+			{
+				if( this.capturePending )
+				{
+					return;
+				}
+
+				this.capturePending = true;
+			}
+
+			this.captureRequest.Set();
+		}
 
         /// <summary>
         /// Normalizes a raw BDD value by selecting the lower value from a complement-equivalent pair.
