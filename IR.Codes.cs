@@ -33,8 +33,6 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 				{ 0x2104, "Input CD" },
 				{ 0x20FB, "Input Tuner" },
 				{ 0x2084, "Input DVD/AUX" },
-				{ 0x19AC, "Tuner Preset +" },
-				{ 0x1953, "Tuner Preset -" },
 				{ 0x213B, "Level +" },
 				{ 0x20C4, "Level -" },
 				{ 0x20BB, "Muting" },
@@ -48,7 +46,6 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 				{ 0x1117, "Tape Pause" },
 				{ 0x11E8, "Tape Stop" },
 				{ 0x1913, "Power Tuner" },
-				{ 0x20A4, "Tuner AM" },
 				{ 0x19F3, "Tuner Channel 1" },
 				{ 0x190C, "Tuner Channel 2" },
 				{ 0x18F3, "Tuner Channel 3" },
@@ -65,6 +62,8 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 				{ 0x186C, "Tuner Auto/Manu" },
 				{ 0x18D3, "Tuner Manual Scan" },
 				{ 0x1853, "Tuner Band" },
+				{ 0x19AC, "Tuner Preset +" },
+				{ 0x1953, "Tuner Preset -" },
 				{ 0x1993, "Tuning +" },
 				{ 0x196C, "Tuning -" }
 			};
