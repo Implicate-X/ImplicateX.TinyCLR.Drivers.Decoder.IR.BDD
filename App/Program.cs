@@ -11,8 +11,8 @@ namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 			public const int RemoteCtrl = FEZFeather.GpioPin.PA0;
 		}
 
-		private static GpioController gpioController;
-		private static BinaryDistanceDecoder binaryDistanceDecoder;
+		private static GpioController gpioController = null!;
+		private static BinaryDistanceDecoder binaryDistanceDecoder = null!;
 
 		static void Main()
 		{
